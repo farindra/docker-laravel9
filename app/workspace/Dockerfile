@@ -18,7 +18,7 @@ ARG LARADOCK_PHP_VERSION
 # FROM letsdockerize/laradock-workspace:2.4-${LARADOCK_PHP_VERSION}
 #FROM letsdockerize/laradock-php-fpm:2.4-${LARADOCK_PHP_VERSION}
 ARG BASE_IMAGE_TAG_PREFIX=latest
-FROM laradock/workspace:${BASE_IMAGE_TAG_PREFIX}-${LARADOCK_PHP_VERSION}
+FROM laradock/php-fpm:${BASE_IMAGE_TAG_PREFIX}-${LARADOCK_PHP_VERSION}
 
 LABEL maintainer="Mahmoud Zalt <mahmoud@zalt.me>"
 
@@ -45,7 +45,7 @@ RUN set -xe; \
     apt-get update -yqq && \
     pecl channel-update pecl.php.net && \
     groupadd -g ${PGID} loops && \
-    useradd -l -u ${PUID} -g loops -m loops -G docker_env && \
+    useradd -u ${PUID} -g loops -m loops  && \
     usermod -p "*" loops -s /bin/bash && \
     apt-get install -yqq \
       apt-utils \
@@ -61,27 +61,26 @@ RUN set -xe; \
       #
       # next lines are here becase there is no auto build on dockerhub see https://github.com/laradock/laradock/pull/1903#issuecomment-463142846
       libzip-dev zip unzip \  
-      php${LARADOCK_PHP_VERSION}-zip \
       # nasm
-      nasm && \
-      php -m | grep -q 'zip'
+      nasm 
       
 
-# RUN php${LARADOCK_PHP_VERSION}-cli
-# RUN php${LARADOCK_PHP_VERSION}-common
-# RUN php${LARADOCK_PHP_VERSION}-curl
-# RUN php${LARADOCK_PHP_VERSION}-intl
-# RUN php${LARADOCK_PHP_VERSION}-json
-# RUN php${LARADOCK_PHP_VERSION}-xml
-# RUN php${LARADOCK_PHP_VERSION}-mbstring
-# RUN php${LARADOCK_PHP_VERSION}-mysql
-# RUN php${LARADOCK_PHP_VERSION}-pgsql
-# RUN php${LARADOCK_PHP_VERSION}-sqlite
-# RUN php${LARADOCK_PHP_VERSION}-sqlite3
-# RUN php${LARADOCK_PHP_VERSION}-bcmath
-# RUN php${LARADOCK_PHP_VERSION}-memcached
-# RUN php${LARADOCK_PHP_VERSION}-gd
-# RUN php${LARADOCK_PHP_VERSION}-dev
+RUN docker-php-ext-install zip
+# RUN docker-php-ext-install cli
+# RUN docker-php-ext-install common
+# RUN docker-php-ext-install curl
+# RUN docker-php-ext-install intl
+#RUN docker-php-ext-install json
+# RUN docker-php-ext-install xml
+# RUN docker-php-ext-install mbstring
+# RUN docker-php-ext-install mysql
+# RUN docker-php-ext-install pgsql
+# RUN docker-php-ext-install sqlite
+# RUN docker-php-ext-install sqlite3
+# RUN docker-php-ext-install bcmath
+# RUN docker-php-ext-install memcached
+# RUN docker-php-ext-install gd
+# RUN docker-php-ext-install dev
 RUN apt-get install -yqq pkg-config \
         libcurl4-openssl-dev \
         libedit-dev \
@@ -102,12 +101,12 @@ RUN apt-get install -yqq pkg-config \
 #####################################
 
 # Install composer and add its bin to the PATH.
-#RUN curl -s http://getcomposer.org/installer | php && \
- #   echo "export PATH=${PATH}:/var/www/vendor/bin" >> ~/.bashrc && \
-#    mv composer.phar /usr/local/bin/composer
+RUN curl -s http://getcomposer.org/installer | php && \
+    echo "export PATH=${PATH}:/var/www/vendor/bin" >> ~/.bashrc && \
+    mv composer.phar /usr/local/bin/composer
 
 # Source the bash
-#RUN . ~/.bashrc
+RUN . ~/.bashrc
 
 ENV NGINX_VERSION 1.17.6
 
@@ -236,22 +235,8 @@ COPY ./composer.json /home/loops/.composer/composer.json
 # Add the auth.json for magento 2 credentials
 COPY ./auth.json /home/loops/.composer/auth.json
 
-# Make sure that ~/.composer belongs to loops
+# Make sure that ~/.composer belongs to laradock
 RUN chown -R loops:loops /home/loops/.composer
-
-# Export composer vendor path
-RUN echo "" >> ~/.bashrc && \
-    echo 'export PATH="$HOME/.composer/vendor/bin:$PATH"' >> ~/.bashrc
-
-# Update composer
-ARG COMPOSER_VERSION=2
-ENV COMPOSER_VERSION ${COMPOSER_VERSION}
-RUN set -eux; \
-      if [ "$COMPOSER_VERSION" = "1" ] || [ "$COMPOSER_VERSION" = "2" ]; then \
-          composer self-update --${COMPOSER_VERSION}; \
-      else \
-          composer self-update ${COMPOSER_VERSION}; \
-      fi
 
 USER loops
 
@@ -265,10 +250,10 @@ RUN if [ ${COMPOSER_GLOBAL_INSTALL} = true ]; then \
 ;fi
 
 # Check if auth file is disabled
-ARG COMPOSER_AUTH_JSON=false
-ENV COMPOSER_AUTH_JSON ${COMPOSER_AUTH_JSON}
+ARG COMPOSER_AUTH=false
+ENV COMPOSER_AUTH ${COMPOSER_AUTH}
 
-RUN if [ ${COMPOSER_AUTH_JSON} = false ]; then \
+RUN if [ ${COMPOSER_AUTH} = false ]; then \
     # remove the file
     rm /home/loops/.composer/auth.json \
 ;fi
@@ -368,6 +353,7 @@ ARG INSTALL_PHPREDIS=false
 RUN if [ ${INSTALL_PHPREDIS} = true ]; then \
     printf "\n" | pecl install -o -f redis \
     &&  rm -rf /tmp/pear \
+    &&  docker-php-ext-enable redis \
 ;fi
 
 ###########################################################################
@@ -802,7 +788,6 @@ RUN set -xe; \
     pecl channel-update pecl.php.net && \
     apt-get install -yqq \
       apt-utils \
-      php${LARADOCK_PHP_VERSION}-zip \
       #
       #--------------------------------------------------------------------------
       # Mandatory Software's Installation
@@ -817,6 +802,7 @@ RUN set -xe; \
       libzip-dev zip unzip && \
       #docker-php-ext-configure zip --with-libzip && \
       # Install the zip extension
+      docker-php-ext-install zip && \
       php -m | grep -q 'zip'
 
 #
@@ -852,7 +838,7 @@ ARG INSTALL_BCMATH=false
 
 RUN if [ ${INSTALL_BCMATH} = true ]; then \
     # Install the bcmath extension
-    apt-get install -yqq  php${LARADOCK_PHP_VERSION}-bcmath \
+    docker-php-ext-install bcmath \
 ;fi
 
 ###########################################################################
@@ -862,7 +848,7 @@ RUN if [ ${INSTALL_BCMATH} = true ]; then \
 ARG INSTALL_OPCACHE=false
 
 RUN if [ ${INSTALL_OPCACHE} = true ]; then \
-    php${LARADOCK_PHP_VERSION}-opcache \
+    docker-php-ext-install opcache \
 ;fi
 
 # Copy opcache configration
@@ -875,7 +861,7 @@ COPY ./opcache.ini /usr/local/etc/php/conf.d/opcache.ini
 ARG INSTALL_MYSQLI=false
 
 RUN if [ ${INSTALL_MYSQLI} = true ]; then \
-    php${LARADOCK_PHP_VERSION}-mysqli \
+    docker-php-ext-install mysqli \
 ;fi
 
 
@@ -887,9 +873,9 @@ ARG INSTALL_INTL=false
 
 RUN if [ ${INSTALL_INTL} = true ]; then \
     # Install intl and requirements
-    apt-get install -y zlib1g-dev libicu-dev g++ \
-    #docker-php-ext-configure intl && \
-    php${LARADOCK_PHP_VERSION}-intl \
+    apt-get install -y zlib1g-dev libicu-dev g++ && \
+    docker-php-ext-configure intl && \
+    docker-php-ext-install intl \
 ;fi
 
 ###########################################################################
@@ -914,7 +900,8 @@ ARG INSTALL_IMAGEMAGICK=false
 
 RUN if [ ${INSTALL_IMAGEMAGICK} = true ]; then \
     apt-get install -y libmagickwand-dev imagemagick && \
-    pecl install imagick  \
+    pecl install imagick && \
+    docker-php-ext-enable imagick \
 ;fi
 
 ###########################################################################
@@ -942,7 +929,7 @@ RUN if [ ${INSTALL_GMP} = true ]; then \
     if [ $(php -r "echo PHP_MAJOR_VERSION;") = "5" ]; then \
       ln -s /usr/include/x86_64-linux-gnu/gmp.h /usr/include/gmp.h \
     ;fi && \
-     apt-get install -y php${LARADOCK_PHP_VERSION}-gmp \
+    docker-php-ext-install gmp \
 ;fi
 
 ###########################################################################
