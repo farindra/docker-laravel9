@@ -1,0 +1,11 @@
+[program:loops-gowaapi-worker]
+process_name=%(program_name)s_%(process_num)02d
+command=php /var/www/app.loops.id/artisan queue:work database --queue=SendWaNotifBuyer --tries=2 --timeout=0$
+autostart=true
+autorestart=true
+numprocs=2
+directory=/var/www/app.loops.id
+redirect_stderr=true
+stdout_logfile=/var/log/supervisor/worker-SendWaNotifBuyer.log
+
+

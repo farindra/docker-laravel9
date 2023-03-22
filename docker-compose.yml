@@ -1,0 +1,418 @@
+version: '3'
+
+networks:
+  frontend:
+    driver: ${NETWORKS_DRIVER}
+  backend:
+    driver: ${NETWORKS_DRIVER}
+
+volumes:
+  mysql:
+    driver: ${VOLUMES_DRIVER}
+  memcached:
+    driver: ${VOLUMES_DRIVER}
+  redis:
+    driver: ${VOLUMES_DRIVER}
+  mongo:
+    driver: ${VOLUMES_DRIVER}
+
+services:
+
+### loops Utilities ##################################
+    loops:
+      build:
+        context: ./app/workspace
+        args:
+          - LARADOCK_PHP_VERSION=${PHP_VERSION}
+          - LARADOCK_PHALCON_VERSION=${PHALCON_VERSION}
+          - INSTALL_PHPREDIS=${WORKSPACE_INSTALL_PHPREDIS}
+          - INSTALL_NODE=${WORKSPACE_INSTALL_NODE}
+          - NPM_REGISTRY=${WORKSPACE_NPM_REGISTRY}
+          - INSTALL_YARN=${WORKSPACE_INSTALL_YARN}
+          - INSTALL_NPM_GULP=${WORKSPACE_INSTALL_NPM_GULP}
+          - INSTALL_NPM_BOWER=${WORKSPACE_INSTALL_NPM_BOWER}
+          - INSTALL_NPM_VUE_CLI=${WORKSPACE_INSTALL_NPM_VUE_CLI}
+          - INSTALL_NPM_ANGULAR_CLI=${WORKSPACE_INSTALL_NPM_ANGULAR_CLI}
+          - COMPOSER_GLOBAL_INSTALL=${WORKSPACE_COMPOSER_GLOBAL_INSTALL}
+          - INSTALL_WORKSPACE_SSH=${WORKSPACE_INSTALL_WORKSPACE_SSH}
+          - INSTALL_LARAVEL_ENVOY=${WORKSPACE_INSTALL_LARAVEL_ENVOY}
+          - INSTALL_LARAVEL_INSTALLER=${WORKSPACE_INSTALL_LARAVEL_INSTALLER}
+          - INSTALL_DEPLOYER=${WORKSPACE_INSTALL_DEPLOYER}
+          - INSTALL_MC=${WORKSPACE_INSTALL_MC}
+          - INSTALL_SYMFONY=${WORKSPACE_INSTALL_SYMFONY}
+          - INSTALL_PYTHON=${WORKSPACE_INSTALL_PYTHON}
+          - INSTALL_IMAGE_OPTIMIZERS=${WORKSPACE_INSTALL_IMAGE_OPTIMIZERS}
+          - INSTALL_IMAGEMAGICK=${WORKSPACE_INSTALL_IMAGEMAGICK}
+          - INSTALL_TERRAFORM=${WORKSPACE_INSTALL_TERRAFORM}
+          - INSTALL_DUSK_DEPS=${WORKSPACE_INSTALL_DUSK_DEPS}
+          - INSTALL_INTL=${WORKSPACE_INSTALL_INTL}
+          - INSTALL_BCMATH=${PHP_FPM_INSTALL_BCMATH}
+          - INSTALL_GMP=${PHP_FPM_INSTALL_GMP}
+          - PUID=${WORKSPACE_PUID}
+          - PGID=${WORKSPACE_PGID}
+          - CHROME_DRIVER_VERSION=${WORKSPACE_CHROME_DRIVER_VERSION}
+          - NODE_VERSION=${WORKSPACE_NODE_VERSION}
+          - YARN_VERSION=${WORKSPACE_YARN_VERSION}
+          - TZ=${WORKSPACE_TIMEZONE}
+          - http_proxy
+          - https_proxy
+          - no_proxy
+          - PHP_UPSTREAM_CONTAINER=${NGINX_PHP_UPSTREAM_CONTAINER}
+          - PHP_UPSTREAM_PORT=${NGINX_PHP_UPSTREAM_PORT}
+          - CHANGE_SOURCE=${CHANGE_SOURCE}
+      volumes:
+        - ${APP_CODE_PATH_HOST}:${APP_CODE_PATH_CONTAINER}${APP_CODE_CONTAINER_FLAG}
+        - ${NGINX_HOST_LOG_PATH}:/var/log/nginx
+        - ${NGINX_SITES_PATH}:/etc/nginx/sites-available
+        - ${NGINX_SSL_PATH}:/etc/nginx/ssl
+        - ${WORKSPACE_SUPERVISOR_LOGS_PATH}:/var/log/supervisor
+        - ${WORKSPACE_SUPERVISOR_D_PATH}:/etc/supervisord.d
+        - ./app/workspace/ssh:/home/laradock/.ssh
+        - ${CERTBOT_PATH}:/etc/letsencrypt
+        - ./app/php-fpm/php${PHP_VERSION}.ini:/usr/local/etc/php/php.ini
+      extra_hosts:
+        - "dockerhost:${DOCKER_HOST_IP}"
+        - "hostname:127.0.0.1"
+      ports:
+        - "${NGINX_HOST_HTTP_PORT}:80"
+        - "8081:8081"
+        - "${NGINX_HOST_HTTPS_PORT}:443"
+        - "${WORKSPACE_SSH_PORT}:22"
+        - "8080:8080"
+        - "${WORKSPACE_SUPERVISOR_PORT}:9001"
+      expose:
+        - "9000"
+      tty: true
+      environment:
+        - PHP_IDE_CONFIG=${PHP_IDE_CONFIG}
+        - DOCKER_HOST=tcp://docker-in-docker:2375
+        - FAKETIME=${PHP_FPM_FAKETIME}
+      depends_on:
+        # - php-fpm
+        - mysql
+        - redis
+      networks:
+        - frontend
+        - backend
+      links:
+        - docker-in-docker
+
+### PHP-FPM ##############################################
+    php-fpm:
+      build:
+        context: ./app/php-fpm
+        args:
+          - LARADOCK_PHP_VERSION=${PHP_VERSION}
+          - LARADOCK_PHALCON_VERSION=${PHALCON_VERSION}
+          - INSTALL_BCMATH=${PHP_FPM_INSTALL_BCMATH}
+          - INSTALL_PHPREDIS=${PHP_FPM_INSTALL_PHPREDIS}
+          - INSTALL_OPCACHE=${PHP_FPM_INSTALL_OPCACHE}
+          - INSTALL_IMAGE_OPTIMIZERS=${PHP_FPM_INSTALL_IMAGE_OPTIMIZERS}
+          - INSTALL_GMP=${PHP_FPM_INSTALL_GMP}
+          - INSTALL_IMAGEMAGICK=${PHP_FPM_INSTALL_IMAGEMAGICK}
+          - http_proxy
+          - https_proxy
+          - no_proxy
+          - PHP_UPSTREAM_CONTAINER=${NGINX_PHP_UPSTREAM_CONTAINER}
+          - PHP_UPSTREAM_PORT=${NGINX_PHP_UPSTREAM_PORT}
+          - CHANGE_SOURCE=${CHANGE_SOURCE}
+      volumes:
+        - ./app/php-fpm/php${PHP_VERSION}.ini:/usr/local/etc/php/php.ini
+        - ${APP_CODE_PATH_HOST}:${APP_CODE_PATH_CONTAINER}${APP_CODE_CONTAINER_FLAG}
+        - ${CERTBOT_PATH}:/etc/letsencrypt
+      expose:
+        - "9000"
+      extra_hosts:
+        - "dockerhost:${DOCKER_HOST_IP}"
+        - "hostname:127.0.0.1"
+      environment:
+        - PHP_IDE_CONFIG=${PHP_IDE_CONFIG}
+        - DOCKER_HOST=tcp://docker-in-docker:2375
+        - FAKETIME=${PHP_FPM_FAKETIME}
+      # depends_on:
+      #   - loops
+      networks:
+        - backend
+      links:
+        - docker-in-docker
+
+### PHP Worker ############################################
+    php-worker:
+      build:
+        context: ./app/php-worker
+        args:
+          - PHP_VERSION=${PHP_VERSION}
+          - PHALCON_VERSION=${PHALCON_VERSION}
+          # - INSTALL_PGSQL=${PHP_WORKER_INSTALL_PGSQL}
+          - INSTALL_BCMATH=${PHP_WORKER_INSTALL_BCMATH}
+          - INSTALL_PHALCON=${PHP_WORKER_INSTALL_PHALCON}
+          - INSTALL_SOAP=${PHP_WORKER_INSTALL_SOAP}
+          - INSTALL_ZIP_ARCHIVE=${PHP_WORKER_INSTALL_ZIP_ARCHIVE}
+          - INSTALL_MYSQL_CLIENT=${PHP_WORKER_INSTALL_MYSQL_CLIENT}
+          - INSTALL_AMQP=${PHP_WORKER_INSTALL_AMQP}
+          - INSTALL_GHOSTSCRIPT=${PHP_WORKER_INSTALL_GHOSTSCRIPT}
+          - INSTALL_SWOOLE=${PHP_WORKER_INSTALL_SWOOLE}
+          - INSTALL_TAINT=${PHP_WORKER_INSTALL_TAINT}
+          - INSTALL_FFMPEG=${PHP_WORKER_INSTALL_FFMPEG}
+          - INSTALL_GMP=${PHP_WORKER_INSTALL_GMP}
+          - PUID=${PHP_WORKER_PUID}
+          - PGID=${PHP_WORKER_PGID}
+      volumes:
+        - ${APP_CODE_PATH_HOST}:${APP_CODE_PATH_CONTAINER}${APP_CODE_CONTAINER_FLAG}
+        - ./app/php-worker/supervisord.d:/etc/supervisord.d
+      #depends_on:
+      #  - loops
+      extra_hosts:
+        - "dockerhost:${DOCKER_HOST_IP}"
+      networks:
+        - backend
+### Laravel Horizon ############################################
+    laravel-horizon:
+      build:
+        context: ./app/laravel-horizon
+        args:
+          - PHP_VERSION=${PHP_VERSION}
+          # - INSTALL_PGSQL=${PHP_FPM_INSTALL_PGSQL}
+          - INSTALL_BCMATH=${PHP_FPM_INSTALL_BCMATH}
+          # - INSTALL_MEMCACHED=${PHP_FPM_INSTALL_MEMCACHED}
+      volumes:
+        - ${APP_CODE_PATH_HOST}:${APP_CODE_PATH_CONTAINER}
+        - ./app/laravel-horizon/supervisord.d:/etc/supervisord.d
+      depends_on:
+        - loops
+      extra_hosts:
+        - "dockerhost:${DOCKER_HOST_IP}"
+      networks:
+        - backend
+
+### NGINX Server #########################################
+    # nginx:
+    #   build:
+    #     context: ./app/nginx
+    #     args:
+    #       - PHP_UPSTREAM_CONTAINER=${NGINX_PHP_UPSTREAM_CONTAINER}
+    #       - PHP_UPSTREAM_PORT=${NGINX_PHP_UPSTREAM_PORT}
+    #       - CHANGE_SOURCE=${CHANGE_SOURCE}
+    #       - http_proxy
+    #       - https_proxy
+    #       - no_proxy
+    #   volumes:
+    #     - ${APP_CODE_PATH_HOST}:${APP_CODE_PATH_CONTAINER}${APP_CODE_CONTAINER_FLAG}
+    #     - ${NGINX_HOST_LOG_PATH}:/var/log/nginx
+    #     - ${NGINX_SITES_PATH}:/etc/nginx/sites-available
+    #     - ${NGINX_SSL_PATH}:/etc/nginx/ssl
+    #   ports:
+    #     - "${NGINX_HOST_HTTP_PORT}:80"
+    #     - "8081:8081"
+    #     - "${NGINX_HOST_HTTPS_PORT}:443"
+    #   depends_on:
+    #     - php-fpm
+    #   networks:
+    #     - frontend
+    #     - backend
+          
+### MySQL ################################################
+    mysql:
+      build:
+        context: ./app/mysql
+        args:
+          - MYSQL_VERSION=${MYSQL_VERSION}
+      environment:
+        - MYSQL_DATABASE=${MYSQL_DATABASE}
+        - MYSQL_USER=${MYSQL_USER}
+        - MYSQL_PASSWORD=${MYSQL_PASSWORD}
+        - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}
+        - TZ=${WORKSPACE_TIMEZONE}
+      volumes:
+        - ${DATA_PATH_HOST}/mysql:/var/lib/mysql
+        - ${MYSQL_ENTRYPOINT_INITDB}:/docker-entrypoint-initdb.d
+      ports:
+        - "${MYSQL_PORT}:3306"
+      networks:
+        - backend
+
+### MongoDB ##############################################
+    mongo:
+      build: ./app/mongo
+      ports:
+        - "${MONGODB_PORT}:27017"
+      volumes:
+        - ${DATA_PATH_HOST}/mongo:/data/db
+      networks:
+        - backend
+
+### Redis ################################################
+    redis:
+      build: ./app/redis
+      volumes:
+        - ${DATA_PATH_HOST}/redis:/data
+      ports:
+        - "${REDIS_PORT}:6379"
+      networks:
+        - backend
+
+### Redis Cluster ##########################################
+    redis-cluster:
+      build: ./app/redis-cluster
+      ports:
+        - "${REDIS_CLUSTER_PORT_RANGE}:7000-7005"
+      networks:
+        - backend
+
+### Memcached ############################################
+    memcached:
+      build: ./app/memcached
+      volumes:
+        - ${DATA_PATH_HOST}/memcached:/var/lib/memcached
+      ports:
+        - "${MEMCACHED_HOST_PORT}:11211"
+      depends_on:
+        - php-fpm
+      networks:
+        - backend
+
+### Beanstalkd ###########################################
+    beanstalkd:
+      build: ./app/beanstalkd
+      ports:
+        - "${BEANSTALKD_HOST_PORT}:11300"
+      privileged: true
+      depends_on:
+        - php-fpm
+      networks:
+        - backend
+
+### Beanstalkd Console ###################################
+    beanstalkd-console:
+      build: ./app/beanstalkd-console
+      ports:
+        - "${BEANSTALKD_CONSOLE_HOST_PORT}:2080"
+      depends_on:
+        - beanstalkd
+      networks:
+        - backend
+
+### Selenium ###############################################
+    selenium:
+      build: ./app/selenium
+      ports:
+        - "${SELENIUM_PORT}:4444"
+      volumes:
+        - /dev/shm:/dev/shm
+      networks:
+        - frontend
+      depends_on:
+        - loops
+      links:
+        - loops:loops.test
+
+### Jenkins ###################################################
+    jenkins:
+      build: ./app/jenkins
+      environment:
+        JAVA_OPTS: "-Djava.awt.headless=true"
+      ports:
+        - "${JENKINS_HOST_SLAVE_AGENT_PORT}:50000"
+        - "${JENKINS_HOST_HTTP_PORT}:8080"
+      privileged: true
+      volumes:
+        - ${JENKINS_HOME}:/var/jenkins_home
+        - /var/run/docker.sock:/var/run/docker.sock
+      networks:
+        - frontend
+        - backend
+
+### Grafana ################################################
+    grafana:
+      build:
+        context: ./app/grafana
+      volumes:
+        - ${DATA_PATH_HOST}/grafana:/var/lib/grafana
+      ports:
+        - "${GRAFANA_PORT}:3000"
+      networks:
+        - backend
+
+### Laravel Echo Server #######################################
+    laravel-echo-server:
+      build:
+        context: ./app/laravel-echo-server
+      volumes:
+        - ./app/laravel-echo-server/laravel-echo-server.json:/app/laravel-echo-server.json:ro
+      ports:
+        - "${LARAVEL_ECHO_SERVER_PORT}:6001"
+      links:
+        - redis
+      networks:
+        - frontend
+        - backend
+
+### Portainer ################################################
+    portainer:
+      build:
+        context: ./app/portainer
+      volumes:
+        - ${DATA_PATH_HOST}/portainer_data:/data
+        - /var/run/docker.sock:/var/run/docker.sock
+      extra_hosts:
+        - "dockerhost:${DOCKER_HOST_IP}"
+      ports:
+        - 9010:9000
+      networks:
+        - backend
+
+### Docker-in-Docker ################################################
+    docker-in-docker:
+      image: docker:dind
+      privileged: true
+      volumes:
+        - ${APP_CODE_PATH_HOST}:${APP_CODE_PATH_CONTAINER}
+      expose:
+        - 2375
+      networks:
+        - backend
+
+### REDISWEBUI ################################################
+    redis-webui:
+      build:
+        context: ./app/redis-webui
+      environment:
+        - ADMIN_USER=${REDIS_WEBUI_USERNAME}
+        - ADMIN_PASS=${REDIS_WEBUI_PASSWORD}
+        - REDIS_1_HOST=${REDIS_WEBUI_CONNECT_HOST}
+        - REDIS_1_PORT=${REDIS_WEBUI_CONNECT_PORT}
+      networks:
+        - backend
+      ports:
+        - "${REDIS_WEBUI_PORT}:80"
+      depends_on:
+        - redis
+
+### MongoWebUI ################################################
+    mongo-webui:
+      build:
+        context: ./app/mongo-webui
+      environment:
+        - ROOT_URL=${MONGO_WEBUI_ROOT_URL}
+        - MONGO_URL=${MONGO_WEBUI_MONGO_URL}
+        - INSTALL_MONGO=${MONGO_WEBUI_INSTALL_MONGO}
+      volumes:
+        - ${DATA_PATH_HOST}/mongo-webui:/data/db
+      ports:
+        - "${MONGO_WEBUI_PORT}:3000"
+      networks:
+        - backend
+      depends_on:
+        - mongo
+
+### DOCKER-REGISTRY ################################################
+    docker-registry:
+      build:
+        context: ./app/docker-registry
+      volumes:
+        - /etc/localtime:/etc/localtime:ro
+        - ${DATA_PATH_HOST}/docker-registry:/var/lib/registry
+      ports:
+        - "${DOCKER_REGISTRY_PORT}:5000"
+      networks:
+        - backend
