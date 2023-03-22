@@ -17,6 +17,8 @@ ARG LARADOCK_PHP_VERSION
 # FROM laradock/workspace:2.2-${LARADOCK_PHP_VERSION}
 # FROM letsdockerize/laradock-workspace:2.4-${LARADOCK_PHP_VERSION}
 FROM letsdockerize/laradock-php-fpm:2.4-${LARADOCK_PHP_VERSION}
+#ARG BASE_IMAGE_TAG_PREFIX=latest
+#FROM laradock/workspace:${BASE_IMAGE_TAG_PREFIX}-${LARADOCK_PHP_VERSION}
 
 LABEL maintainer="Mahmoud Zalt <mahmoud@zalt.me>"
 
@@ -60,7 +62,9 @@ RUN set -xe; \
       # next lines are here becase there is no auto build on dockerhub see https://github.com/laradock/laradock/pull/1903#issuecomment-463142846
       libzip-dev zip unzip \  
       # nasm
-      nasm 
+      nasm \
+      libxml2-dev \
+      icu-dev
       
 
 RUN docker-php-ext-install zip
